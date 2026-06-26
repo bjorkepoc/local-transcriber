@@ -8,16 +8,24 @@ public struct TranscriptionRunner: Sendable {
     }
 
     public func transcribe(
-        _ request: TranscriptionRequest,
+        audioFile: URL,
+        model: TranscriptionModel,
+        language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) async throws -> TranscriptionResult {
         try await Task.detached(priority: .userInitiated) {
-            try self.transcribeSynchronously(request, status: status)
+            try self.transcribeSynchronously(
+                audioFile: audioFile,
+                model: model,
+                language: language,
+                status: status
+            )
         }.value
     }
 
     static func mlxWhisperArguments(
-        request: TranscriptionRequest,
+        audioFile: URL,
+        language: TranscriptionLanguage,
         outputDirectory: URL,
         outputName: String = "transcript"
     ) -> [String] {
@@ -28,54 +36,57 @@ public struct TranscriptionRunner: Sendable {
             "--output-name", outputName
         ]
 
-        if let languageCode = request.language.whisperCode {
+        if let languageCode = language.cliCode {
             arguments.append(contentsOf: ["--language", languageCode])
         }
 
-        arguments.append(request.audioFile.path)
+        arguments.append(audioFile.path)
         return arguments
     }
 
-    static func canaryArguments(request: TranscriptionRequest) -> [String] {
+    static func canaryArguments(audioFile: URL, language: TranscriptionLanguage) -> [String] {
         var arguments: [String] = []
 
-        if let sourceLanguage = request.language.canaryCode {
+        if let sourceLanguage = language.cliCode {
             arguments.append(contentsOf: ["--source-lang", sourceLanguage])
         }
 
-        arguments.append(request.audioFile.path)
+        arguments.append(audioFile.path)
         return arguments
     }
 
     private func transcribeSynchronously(
-        _ request: TranscriptionRequest,
+        audioFile: URL,
+        model: TranscriptionModel,
+        language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
-        guard request.model.isRunnable else {
-            throw TranscriptionError.unsupportedModel(request.model.unavailableReason)
+        guard model.isRunnable else {
+            throw TranscriptionError.unsupportedModel(model.unavailableReason)
         }
 
-        try ensureAudioFileExists(request.audioFile)
+        try ensureAudioFileExists(audioFile)
 
         status("Sjekker lokale verktøy")
         let ffmpegURL = try requireTool("ffmpeg")
-        try ensureModelIsCached(request.model)
+        try ensureModelIsCached(model)
 
         status("Validerer lydfil med ffmpeg")
-        try validateAudioFile(ffmpegURL: ffmpegURL, audioFile: request.audioFile)
+        try validateAudioFile(ffmpegURL: ffmpegURL, audioFile: audioFile)
 
-        switch request.model.runnerKind {
-        case .mlxWhisper:
-            return try runMLXWhisper(request: request, status: status)
-        case .canary:
-            return try runCanary(request: request, status: status)
-        case .unavailable:
-            throw TranscriptionError.unsupportedModel(request.model.unavailableReason)
+        switch model {
+        case .mlxWhisperLargeV3Turbo:
+            return try runMLXWhisper(audioFile: audioFile, language: language, status: status)
+        case .canary1BV2:
+            return try runCanary(audioFile: audioFile, language: language, status: status)
+        case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
+            throw TranscriptionError.unsupportedModel(model.unavailableReason)
         }
     }
 
     private func runMLXWhisper(
-        request: TranscriptionRequest,
+        audioFile: URL,
+        language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
         let mlxWhisperURL = try requireTool("mlx_whisper")
@@ -83,7 +94,11 @@ public struct TranscriptionRunner: Sendable {
         defer { try? FileManager.default.removeItem(at: outputDirectory) }
 
         status("Kjører MLX Whisper lokalt")
-        let arguments = Self.mlxWhisperArguments(request: request, outputDirectory: outputDirectory)
+        let arguments = Self.mlxWhisperArguments(
+            audioFile: audioFile,
+            language: language,
+            outputDirectory: outputDirectory
+        )
         let execution = try runProcess(executableURL: mlxWhisperURL, arguments: arguments)
 
         guard execution.terminationStatus == 0 else {
@@ -122,13 +137,14 @@ public struct TranscriptionRunner: Sendable {
     }
 
     private func runCanary(
-        request: TranscriptionRequest,
+        audioFile: URL,
+        language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
         let canaryURL = try requireTool("canary-transcribe")
 
         status("Kjører NVIDIA Canary lokalt")
-        let arguments = Self.canaryArguments(request: request)
+        let arguments = Self.canaryArguments(audioFile: audioFile, language: language)
         let execution = try runProcess(executableURL: canaryURL, arguments: arguments)
 
         guard execution.terminationStatus == 0 else {

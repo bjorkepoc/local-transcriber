@@ -3,23 +3,16 @@ import Foundation
 public struct ToolResolver: Sendable {
     public let searchPaths: [String]
 
-    public init(extraPaths: [String] = []) {
+    public init() {
         let environmentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
         let pathItems = environmentPath.split(separator: ":").map(String.init)
-        let defaults = [
+        searchPaths = pathItems + [
             "\(NSHomeDirectory())/.local/bin",
             "/opt/homebrew/bin",
             "/usr/local/bin",
             "/usr/bin",
             "/bin"
         ]
-
-        var seen = Set<String>()
-        searchPaths = (extraPaths + pathItems + defaults).filter { path in
-            guard !path.isEmpty, !seen.contains(path) else { return false }
-            seen.insert(path)
-            return true
-        }
     }
 
     public func resolve(_ executableName: String) -> URL? {

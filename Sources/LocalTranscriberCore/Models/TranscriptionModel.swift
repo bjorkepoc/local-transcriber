@@ -19,19 +19,13 @@ public enum TranscriptionModel: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    public var runnerKind: RunnerKind {
-        switch self {
-        case .mlxWhisperLargeV3Turbo:
-            .mlxWhisper
-        case .canary1BV2:
-            .canary
-        case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
-            .unavailable
-        }
-    }
-
     public var isRunnable: Bool {
-        runnerKind != .unavailable
+        switch self {
+        case .mlxWhisperLargeV3Turbo, .canary1BV2:
+            true
+        case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
+            false
+        }
     }
 
     public var defaultLanguage: TranscriptionLanguage {
@@ -56,17 +50,6 @@ public enum TranscriptionModel: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    public var notice: String? {
-        switch self {
-        case .mlxWhisperLargeV3Turbo:
-            "Anbefalt standard for norsk."
-        case .canary1BV2:
-            "Ikke anbefalt for norsk"
-        case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
-            unavailableReason
-        }
-    }
-
     public var unavailableReason: String {
         switch self {
         case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
@@ -75,10 +58,4 @@ public enum TranscriptionModel: String, CaseIterable, Identifiable, Sendable {
             ""
         }
     }
-}
-
-public enum RunnerKind: Sendable {
-    case mlxWhisper
-    case canary
-    case unavailable
 }

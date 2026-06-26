@@ -34,17 +34,16 @@ final class TranscriptionViewModel: ObservableObject {
     }
 
     var modelNotice: String? {
-        if !selectedModel.isRunnable {
-            return selectedModel.unavailableReason
-        }
-
-        if selectedModel == .canary1BV2 {
+        switch selectedModel {
+        case .mlxWhisperLargeV3Turbo:
+            return "Anbefalt standard for norsk."
+        case .canary1BV2:
             return selectedLanguage == .norwegian
                 ? "Ikke anbefalt for norsk"
                 : "Canary kjører lokalt, men MLX Whisper er anbefalt for norsk."
+        case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
+            return selectedModel.unavailableReason
         }
-
-        return selectedModel.notice
     }
 
     var canSaveText: Bool {
@@ -56,7 +55,7 @@ final class TranscriptionViewModel: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.allowedContentTypes = [.audio, .movie, .mpeg4Audio, .localWAV, .localAIFF, .localMP3]
+        panel.allowedContentTypes = [.audio, .movie]
 
         if panel.runModal() == .OK {
             audioFile = panel.url
@@ -86,14 +85,12 @@ final class TranscriptionViewModel: ObservableObject {
         lastResult = nil
         statusText = "Starter lokal transkribering"
 
-        let request = TranscriptionRequest(
-            audioFile: audioFile,
-            model: selectedModel,
-            language: selectedLanguage
-        )
-
         do {
-            let result = try await runner.transcribe(request) { [weak self] message in
+            let result = try await runner.transcribe(
+                audioFile: audioFile,
+                model: selectedModel,
+                language: selectedLanguage
+            ) { [weak self] message in
                 Task { @MainActor in
                     self?.statusText = message
                 }
@@ -158,10 +155,4 @@ final class TranscriptionViewModel: ObservableObject {
         let base = audioFile?.deletingPathExtension().lastPathComponent ?? "transkripsjon"
         return "\(base).\(fileExtension)"
     }
-}
-
-private extension UTType {
-    static let localWAV = UTType(filenameExtension: "wav") ?? .audio
-    static let localAIFF = UTType(filenameExtension: "aiff") ?? .audio
-    static let localMP3 = UTType(filenameExtension: "mp3") ?? .audio
 }

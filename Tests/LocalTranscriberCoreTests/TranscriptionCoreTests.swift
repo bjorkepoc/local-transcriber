@@ -3,15 +3,10 @@ import Testing
 @testable import LocalTranscriberCore
 
 @Test func mlxWhisperArgumentsUseNorwegianAndAllOutputs() {
-    let request = TranscriptionRequest(
-        audioFile: URL(fileURLWithPath: "/tmp/test.wav"),
-        model: .mlxWhisperLargeV3Turbo,
-        language: .norwegian
-    )
-
     let outputDirectory = URL(fileURLWithPath: "/tmp/out", isDirectory: true)
     let arguments = TranscriptionRunner.mlxWhisperArguments(
-        request: request,
+        audioFile: URL(fileURLWithPath: "/tmp/test.wav"),
+        language: .norwegian,
         outputDirectory: outputDirectory
     )
 
@@ -24,6 +19,14 @@ import Testing
     #expect(arguments.last == "/tmp/test.wav")
 }
 
+@Test func languagesExposeOneSharedOptionalCliCode() {
+    #expect(TranscriptionLanguage.norwegian.cliCode == "no")
+    #expect(TranscriptionLanguage.english.cliCode == "en")
+    #expect(TranscriptionLanguage.swedish.cliCode == "sv")
+    #expect(TranscriptionLanguage.danish.cliCode == "da")
+    #expect(TranscriptionLanguage.auto.cliCode == nil)
+}
+
 @Test func hfModelsAreVisibleButNotRunnableInVersionOne() {
     #expect(TranscriptionModel.hfWhisperLargeV3Turbo.isRunnable == false)
     #expect(TranscriptionModel.hfWhisperLargeV3.isRunnable == false)
@@ -32,14 +35,10 @@ import Testing
 
 @Test func canaryIsRunnableButWarnedForNorwegianUse() {
     #expect(TranscriptionModel.canary1BV2.isRunnable)
-    #expect(TranscriptionModel.canary1BV2.notice == "Ikke anbefalt for norsk")
 
-    let request = TranscriptionRequest(
+    let arguments = TranscriptionRunner.canaryArguments(
         audioFile: URL(fileURLWithPath: "/tmp/test.wav"),
-        model: .canary1BV2,
         language: .norwegian
     )
-
-    let arguments = TranscriptionRunner.canaryArguments(request: request)
     #expect(arguments == ["--source-lang", "no", "/tmp/test.wav"])
 }

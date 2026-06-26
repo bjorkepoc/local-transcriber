@@ -22,22 +22,7 @@ public enum TranscriptionLanguage: String, CaseIterable, Identifiable, Sendable 
         }
     }
 
-    public var whisperCode: String? {
-        switch self {
-        case .norwegian:
-            "no"
-        case .english:
-            "en"
-        case .swedish:
-            "sv"
-        case .danish:
-            "da"
-        case .auto:
-            nil
-        }
-    }
-
-    public var canaryCode: String? {
+    public var cliCode: String? {
         switch self {
         case .norwegian:
             "no"
