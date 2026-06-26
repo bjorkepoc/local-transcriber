@@ -14,16 +14,12 @@ let package = Package(
         )
     ],
     targets: [
-        .target(
-            name: "LocalTranscriberCore"
-        ),
         .executableTarget(
-            name: "LocalTranscriber",
-            dependencies: ["LocalTranscriberCore"]
+            name: "LocalTranscriber"
         ),
         .testTarget(
-            name: "LocalTranscriberCoreTests",
-            dependencies: ["LocalTranscriberCore"]
+            name: "LocalTranscriberTests",
+            dependencies: ["LocalTranscriber"]
         ),
     ],
     swiftLanguageModes: [.v6]

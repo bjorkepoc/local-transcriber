@@ -1,7 +1,6 @@
 import AppKit
 import Combine
 import Foundation
-import LocalTranscriberCore
 import UniformTypeIdentifiers
 
 @MainActor
@@ -22,7 +21,7 @@ final class TranscriptionViewModel: ObservableObject {
     }
 
     var canStart: Bool {
-        audioFile != nil && selectedModel.isRunnable && !isRunning
+        audioFile != nil && !isRunning
     }
 
     var selectedFileName: String {
@@ -41,8 +40,6 @@ final class TranscriptionViewModel: ObservableObject {
             return selectedLanguage == .norwegian
                 ? "Ikke anbefalt for norsk"
                 : "Canary kjører lokalt, men MLX Whisper er anbefalt for norsk."
-        case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
-            return selectedModel.unavailableReason
         }
     }
 
@@ -72,11 +69,6 @@ final class TranscriptionViewModel: ObservableObject {
     func transcribe() async {
         guard let audioFile else {
             errorMessage = "Velg en lydfil først."
-            return
-        }
-
-        guard selectedModel.isRunnable else {
-            errorMessage = selectedModel.unavailableReason
             return
         }
 
@@ -122,17 +114,20 @@ final class TranscriptionViewModel: ObservableObject {
         )
     }
 
-    func canSaveGenerated(_ format: TranscriptOutputFormat) -> Bool {
-        lastResult?.outputs[format] != nil
+    var canSaveSRT: Bool {
+        lastResult?.srt != nil
     }
 
-    func saveGenerated(_ format: TranscriptOutputFormat) {
-        guard let contents = lastResult?.outputs[format] else { return }
-        save(
-            contents: contents,
-            defaultName: defaultOutputName(extension: format.fileExtension),
-            allowedTypes: [format.contentType]
-        )
+    var canSaveJSON: Bool {
+        lastResult?.json != nil
+    }
+
+    func saveGeneratedSRT() {
+        saveGenerated(contents: lastResult?.srt, extension: "srt", contentType: UTType(filenameExtension: "srt") ?? .plainText)
+    }
+
+    func saveGeneratedJSON() {
+        saveGenerated(contents: lastResult?.json, extension: "json", contentType: .json)
     }
 
     private func save(contents: String, defaultName: String, allowedTypes: [UTType]) {
@@ -154,5 +149,14 @@ final class TranscriptionViewModel: ObservableObject {
     private func defaultOutputName(extension fileExtension: String) -> String {
         let base = audioFile?.deletingPathExtension().lastPathComponent ?? "transkripsjon"
         return "\(base).\(fileExtension)"
+    }
+
+    private func saveGenerated(contents: String?, extension fileExtension: String, contentType: UTType) {
+        guard let contents else { return }
+        save(
+            contents: contents,
+            defaultName: defaultOutputName(extension: fileExtension),
+            allowedTypes: [contentType]
+        )
     }
 }

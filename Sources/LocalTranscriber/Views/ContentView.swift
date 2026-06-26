@@ -1,4 +1,3 @@
-import LocalTranscriberCore
 import SwiftUI
 
 struct ContentView: View {
@@ -47,10 +46,9 @@ struct ContentView: View {
                 }
 
                 if let notice = viewModel.modelNotice {
-                    let symbol = viewModel.selectedModel.isRunnable ? "info.circle" : "exclamationmark.triangle"
-                    Label(notice, systemImage: symbol)
+                    Label(notice, systemImage: "info.circle")
                         .font(.callout)
-                        .foregroundStyle(viewModel.selectedModel.isRunnable ? Color.secondary : Color.orange)
+                        .foregroundStyle(Color.secondary)
                 }
             }
 
@@ -138,18 +136,18 @@ struct ContentView: View {
             .disabled(!viewModel.canSaveText)
 
             Button {
-                viewModel.saveGenerated(.srt)
+                viewModel.saveGeneratedSRT()
             } label: {
                 Label("Lagre SRT", systemImage: "captions.bubble")
             }
-            .disabled(!viewModel.canSaveGenerated(.srt))
+            .disabled(!viewModel.canSaveSRT)
 
             Button {
-                viewModel.saveGenerated(.json)
+                viewModel.saveGeneratedJSON()
             } label: {
                 Label("Lagre JSON", systemImage: "curlybraces")
             }
-            .disabled(!viewModel.canSaveGenerated(.json))
+            .disabled(!viewModel.canSaveJSON)
         }
     }
 }

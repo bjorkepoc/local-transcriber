@@ -1,13 +1,13 @@
-public enum TranscriptionLanguage: String, CaseIterable, Identifiable, Sendable {
+enum TranscriptionLanguage: String, CaseIterable, Identifiable, Sendable {
     case norwegian
     case english
     case swedish
     case danish
     case auto
 
-    public var id: String { rawValue }
+    var id: String { rawValue }
 
-    public var displayName: String {
+    var displayName: String {
         switch self {
         case .norwegian:
             "Norsk"
@@ -22,7 +22,7 @@ public enum TranscriptionLanguage: String, CaseIterable, Identifiable, Sendable 
         }
     }
 
-    public var cliCode: String? {
+    var cliCode: String? {
         switch self {
         case .norwegian:
             "no"
@@ -36,4 +36,10 @@ public enum TranscriptionLanguage: String, CaseIterable, Identifiable, Sendable 
             nil
         }
     }
+}
+
+struct TranscriptionResult: Sendable {
+    let text: String
+    let srt: String?
+    let json: String?
 }

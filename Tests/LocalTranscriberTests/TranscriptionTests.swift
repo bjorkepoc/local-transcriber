@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import LocalTranscriberCore
+@testable import LocalTranscriber
 
 @Test func mlxWhisperArgumentsUseNorwegianAndAllOutputs() {
     let outputDirectory = URL(fileURLWithPath: "/tmp/out", isDirectory: true)
@@ -16,6 +16,8 @@ import Testing
     #expect(arguments.contains("no"))
     #expect(arguments.contains("--output-format"))
     #expect(arguments.contains("all"))
+    #expect(arguments.contains("--output-name"))
+    #expect(arguments.contains("transcript"))
     #expect(arguments.last == "/tmp/test.wav")
 }
 
@@ -27,15 +29,11 @@ import Testing
     #expect(TranscriptionLanguage.auto.cliCode == nil)
 }
 
-@Test func hfModelsAreVisibleButNotRunnableInVersionOne() {
-    #expect(TranscriptionModel.hfWhisperLargeV3Turbo.isRunnable == false)
-    #expect(TranscriptionModel.hfWhisperLargeV3.isRunnable == false)
-    #expect(TranscriptionModel.hfWhisperLargeV3Turbo.defaultLanguage == .norwegian)
+@Test func onlyRunnableModelsAreVisible() {
+    #expect(TranscriptionModel.allCases == [.mlxWhisperLargeV3Turbo, .canary1BV2])
 }
 
 @Test func canaryIsRunnableButWarnedForNorwegianUse() {
-    #expect(TranscriptionModel.canary1BV2.isRunnable)
-
     let arguments = TranscriptionRunner.canaryArguments(
         audioFile: URL(fileURLWithPath: "/tmp/test.wav"),
         language: .norwegian

@@ -1,13 +1,7 @@
 import Foundation
 
-public struct TranscriptionRunner: Sendable {
-    private let resolver: ToolResolver
-
-    public init(resolver: ToolResolver = ToolResolver()) {
-        self.resolver = resolver
-    }
-
-    public func transcribe(
+struct TranscriptionRunner: Sendable {
+    func transcribe(
         audioFile: URL,
         model: TranscriptionModel,
         language: TranscriptionLanguage,
@@ -26,14 +20,13 @@ public struct TranscriptionRunner: Sendable {
     static func mlxWhisperArguments(
         audioFile: URL,
         language: TranscriptionLanguage,
-        outputDirectory: URL,
-        outputName: String = "transcript"
+        outputDirectory: URL
     ) -> [String] {
         var arguments = [
             "--model", "mlx-community/whisper-large-v3-turbo",
             "--output-format", "all",
             "--output-dir", outputDirectory.path,
-            "--output-name", outputName
+            "--output-name", "transcript"
         ]
 
         if let languageCode = language.cliCode {
@@ -61,26 +54,13 @@ public struct TranscriptionRunner: Sendable {
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
-        guard model.isRunnable else {
-            throw TranscriptionError.unsupportedModel(model.unavailableReason)
-        }
-
         try ensureAudioFileExists(audioFile)
-
-        status("Sjekker lokale verktøy")
-        let ffmpegURL = try requireTool("ffmpeg")
-        try ensureModelIsCached(model)
-
-        status("Validerer lydfil med ffmpeg")
-        try validateAudioFile(ffmpegURL: ffmpegURL, audioFile: audioFile)
 
         switch model {
         case .mlxWhisperLargeV3Turbo:
             return try runMLXWhisper(audioFile: audioFile, language: language, status: status)
         case .canary1BV2:
             return try runCanary(audioFile: audioFile, language: language, status: status)
-        case .hfWhisperLargeV3Turbo, .hfWhisperLargeV3:
-            throw TranscriptionError.unsupportedModel(model.unavailableReason)
         }
     }
 
@@ -89,7 +69,6 @@ public struct TranscriptionRunner: Sendable {
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
-        let mlxWhisperURL = try requireTool("mlx_whisper")
         let outputDirectory = try createTemporaryDirectory(named: "mlx-output")
         defer { try? FileManager.default.removeItem(at: outputDirectory) }
 
@@ -99,7 +78,7 @@ public struct TranscriptionRunner: Sendable {
             language: language,
             outputDirectory: outputDirectory
         )
-        let execution = try runProcess(executableURL: mlxWhisperURL, arguments: arguments)
+        let execution = try runProcess(tool: "mlx_whisper", arguments: arguments)
 
         guard execution.terminationStatus == 0 else {
             throw TranscriptionError.processFailed(
@@ -118,22 +97,15 @@ public struct TranscriptionRunner: Sendable {
             throw TranscriptionError.missingOutput("MLX Whisper fullførte, men laget ikke transcript.txt.")
         }
 
-        var outputs: [TranscriptOutputFormat: String] = [
-            .txt: try String(contentsOf: textURL, encoding: .utf8)
-        ]
+        let text = try String(contentsOf: textURL, encoding: .utf8)
+        let srt = FileManager.default.fileExists(atPath: srtURL.path)
+            ? try String(contentsOf: srtURL, encoding: .utf8)
+            : nil
+        let json = FileManager.default.fileExists(atPath: jsonURL.path)
+            ? try String(contentsOf: jsonURL, encoding: .utf8)
+            : nil
 
-        if FileManager.default.fileExists(atPath: srtURL.path) {
-            outputs[.srt] = try String(contentsOf: srtURL, encoding: .utf8)
-        }
-
-        if FileManager.default.fileExists(atPath: jsonURL.path) {
-            outputs[.json] = try String(contentsOf: jsonURL, encoding: .utf8)
-        }
-
-        return TranscriptionResult(
-            text: outputs[.txt]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
-            outputs: outputs
-        )
+        return TranscriptionResult(text: text.trimmingCharacters(in: .whitespacesAndNewlines), srt: srt, json: json)
     }
 
     private func runCanary(
@@ -141,11 +113,9 @@ public struct TranscriptionRunner: Sendable {
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
-        let canaryURL = try requireTool("canary-transcribe")
-
         status("Kjører NVIDIA Canary lokalt")
         let arguments = Self.canaryArguments(audioFile: audioFile, language: language)
-        let execution = try runProcess(executableURL: canaryURL, arguments: arguments)
+        let execution = try runProcess(tool: "canary-transcribe", arguments: arguments)
 
         guard execution.terminationStatus == 0 else {
             throw TranscriptionError.processFailed(
@@ -160,21 +130,7 @@ public struct TranscriptionRunner: Sendable {
             throw TranscriptionError.missingOutput("Canary fullførte, men ga ingen transkripsjon på stdout.")
         }
 
-        return TranscriptionResult(
-            text: text,
-            outputs: [.txt: text]
-        )
-    }
-
-    private func validateAudioFile(ffmpegURL: URL, audioFile: URL) throws {
-        let execution = try runProcess(
-            executableURL: ffmpegURL,
-            arguments: ["-v", "error", "-i", audioFile.path, "-t", "0.1", "-f", "null", "-"]
-        )
-
-        guard execution.terminationStatus == 0 else {
-            throw TranscriptionError.invalidAudioFile(displayTail(execution.combinedOutput))
-        }
+        return TranscriptionResult(text: text, srt: nil, json: nil)
     }
 
     private func ensureAudioFileExists(_ audioFile: URL) throws {
@@ -185,68 +141,33 @@ public struct TranscriptionRunner: Sendable {
         }
     }
 
-    private func ensureModelIsCached(_ model: TranscriptionModel) throws {
-        guard let repositoryID = model.repositoryID else { return }
-        let cacheDirectory = huggingFaceHubCacheDirectory()
-        let expectedDirectory = cacheDirectory.appendingPathComponent(
-            "models--\(repositoryID.replacingOccurrences(of: "/", with: "--"))",
-            isDirectory: true
-        )
-
-        guard FileManager.default.fileExists(atPath: expectedDirectory.path) else {
-            throw TranscriptionError.missingModel(
-                repositoryID: repositoryID,
-                expectedPath: expectedDirectory.path
-            )
-        }
-    }
-
-    private func requireTool(_ name: String) throws -> URL {
-        guard let url = resolver.resolve(name) else {
-            throw TranscriptionError.missingTool(name: name, searchedPaths: resolver.searchPaths)
-        }
-        return url
-    }
-
-    private func runProcess(executableURL: URL, arguments: [String]) throws -> ProcessExecution {
-        let runDirectory = try createTemporaryDirectory(named: "process")
-        defer { try? FileManager.default.removeItem(at: runDirectory) }
-
-        let stdoutURL = runDirectory.appendingPathComponent("stdout.log")
-        let stderrURL = runDirectory.appendingPathComponent("stderr.log")
-        FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
-        FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
-
-        let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
-        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
-        defer {
-            try? stdoutHandle.close()
-            try? stderrHandle.close()
-        }
+    private func runProcess(tool: String, arguments: [String]) throws -> ProcessExecution {
+        let stdout = PipeCapture()
+        let stderr = PipeCapture()
+        let readers = DispatchGroup()
+        stdout.start(in: readers)
+        stderr.start(in: readers)
 
         let process = Process()
-        process.executableURL = executableURL
-        process.arguments = arguments
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [tool] + arguments
         process.environment = processEnvironment()
-        process.standardOutput = stdoutHandle
-        process.standardError = stderrHandle
+        process.standardOutput = stdout.pipe
+        process.standardError = stderr.pipe
 
         try process.run()
         process.waitUntilExit()
-
-        let standardOutput = try String(contentsOf: stdoutURL, encoding: .utf8)
-        let standardError = try String(contentsOf: stderrURL, encoding: .utf8)
+        readers.wait()
 
         return ProcessExecution(
             terminationStatus: process.terminationStatus,
-            standardOutput: standardOutput,
-            standardError: standardError
+            standardOutput: stdout.string,
+            standardError: stderr.string
         )
     }
 
     private func processEnvironment() -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = resolver.searchPaths.joined(separator: ":")
         environment["HF_HUB_OFFLINE"] = "1"
         environment["TRANSFORMERS_OFFLINE"] = "1"
         environment["HF_HUB_DISABLE_TELEMETRY"] = "1"
@@ -260,26 +181,51 @@ public struct TranscriptionRunner: Sendable {
         return directory
     }
 
-    private func huggingFaceHubCacheDirectory() -> URL {
-        let environment = ProcessInfo.processInfo.environment
-
-        if let hubCache = environment["HF_HUB_CACHE"], !hubCache.isEmpty {
-            return URL(fileURLWithPath: hubCache, isDirectory: true)
-        }
-
-        if let hfHome = environment["HF_HOME"], !hfHome.isEmpty {
-            return URL(fileURLWithPath: hfHome, isDirectory: true)
-                .appendingPathComponent("hub", isDirectory: true)
-        }
-
-        return URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-            .appendingPathComponent(".cache/huggingface/hub", isDirectory: true)
-    }
-
     private func displayTail(_ text: String, maxCharacters: Int = 1_200) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count > maxCharacters else { return trimmed }
         return String(trimmed.suffix(maxCharacters))
+    }
+}
+
+private enum TranscriptionError: Error, LocalizedError, Sendable {
+    case fileNotFound(String)
+    case processFailed(tool: String, code: Int32, output: String)
+    case missingOutput(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .fileNotFound(let path):
+            "Fant ikke lydfilen: \(path)"
+        case .processFailed(let tool, let code, let output):
+            "\(tool) feilet med kode \(code). \(output)"
+        case .missingOutput(let message):
+            message
+        }
+    }
+}
+
+private final class PipeCapture: @unchecked Sendable {
+    let pipe = Pipe()
+
+    private let lock = NSLock()
+    private var data = Data()
+
+    func start(in group: DispatchGroup) {
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer { group.leave() }
+            let captured = (try? self.pipe.fileHandleForReading.readToEnd()) ?? Data()
+            self.lock.withLock {
+                self.data = captured
+            }
+        }
+    }
+
+    var string: String {
+        lock.withLock {
+            String(decoding: data, as: UTF8.self)
+        }
     }
 }
 
