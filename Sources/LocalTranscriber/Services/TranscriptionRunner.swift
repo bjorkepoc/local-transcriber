@@ -7,11 +7,8 @@ struct TranscriptionRunner: Sendable {
         status: @escaping @Sendable (String) -> Void
     ) async throws -> TranscriptionResult {
         try await Task.detached(priority: .userInitiated) {
-            try self.transcribeSynchronously(
-                audioFile: audioFile,
-                language: language,
-                status: status
-            )
+            try self.ensureAudioFileExists(audioFile)
+            return try self.runMLXWhisper(audioFile: audioFile, language: language, status: status)
         }.value
     }
 
@@ -35,15 +32,6 @@ struct TranscriptionRunner: Sendable {
         return arguments
     }
 
-    private func transcribeSynchronously(
-        audioFile: URL,
-        language: TranscriptionLanguage,
-        status: @escaping @Sendable (String) -> Void
-    ) throws -> TranscriptionResult {
-        try ensureAudioFileExists(audioFile)
-        return try runMLXWhisper(audioFile: audioFile, language: language, status: status)
-    }
-
     private func runMLXWhisper(
         audioFile: URL,
         language: TranscriptionLanguage,
@@ -62,11 +50,11 @@ struct TranscriptionRunner: Sendable {
         )
         let execution = try runProcess(tool: "mlx_whisper", arguments: arguments)
 
-        guard execution.terminationStatus == 0 else {
+        guard execution.code == 0 else {
             throw TranscriptionError.processFailed(
                 tool: "mlx_whisper",
-                code: execution.terminationStatus,
-                output: displayTail(execution.combinedOutput)
+                code: execution.code,
+                output: displayTail(execution.output)
             )
         }
 
@@ -98,7 +86,7 @@ struct TranscriptionRunner: Sendable {
         }
     }
 
-    private func runProcess(tool: String, arguments: [String]) throws -> ProcessExecution {
+    private func runProcess(tool: String, arguments: [String]) throws -> (code: Int32, output: String) {
         let stdout = PipeCapture()
         let stderr = PipeCapture()
         let readers = DispatchGroup()
@@ -120,11 +108,12 @@ struct TranscriptionRunner: Sendable {
         process.waitUntilExit()
         readers.wait()
 
-        return ProcessExecution(
-            terminationStatus: process.terminationStatus,
-            standardOutput: stdout.string,
-            standardError: stderr.string
-        )
+        let output = [stdout.string, stderr.string]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+        return (process.terminationStatus, output)
     }
 
     private func displayTail(_ text: String, maxCharacters: Int = 1_200) -> String {
@@ -172,18 +161,5 @@ private final class PipeCapture: @unchecked Sendable {
         lock.withLock {
             String(decoding: data, as: UTF8.self)
         }
-    }
-}
-
-private struct ProcessExecution: Sendable {
-    let terminationStatus: Int32
-    let standardOutput: String
-    let standardError: String
-
-    var combinedOutput: String {
-        [standardOutput, standardError]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
     }
 }

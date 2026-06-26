@@ -12,12 +12,8 @@ final class TranscriptionViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var isRunning = false
 
-    private let runner: TranscriptionRunner
+    private let runner = TranscriptionRunner()
     private var lastResult: TranscriptionResult?
-
-    init(runner: TranscriptionRunner = TranscriptionRunner()) {
-        self.runner = runner
-    }
 
     var canStart: Bool {
         audioFile != nil && !isRunning
