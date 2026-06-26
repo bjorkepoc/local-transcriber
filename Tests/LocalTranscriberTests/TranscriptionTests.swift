@@ -10,15 +10,14 @@ import Testing
         outputDirectory: outputDirectory
     )
 
-    #expect(arguments.contains("--model"))
-    #expect(arguments.contains("mlx-community/whisper-large-v3-turbo"))
-    #expect(arguments.contains("--language"))
-    #expect(arguments.contains("no"))
-    #expect(arguments.contains("--output-format"))
-    #expect(arguments.contains("all"))
-    #expect(arguments.contains("--output-name"))
-    #expect(arguments.contains("transcript"))
-    #expect(arguments.last == "/tmp/test.wav")
+    #expect(arguments == [
+        "--model", "mlx-community/whisper-large-v3-turbo",
+        "--output-format", "all",
+        "--output-dir", "/tmp/out",
+        "--output-name", "transcript",
+        "--language", "no",
+        "/tmp/test.wav"
+    ])
 }
 
 @Test func languagesExposeOneSharedOptionalCliCode() {

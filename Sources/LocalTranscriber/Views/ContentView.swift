@@ -16,11 +16,11 @@ struct ContentView: View {
         Form {
             Section("Lydfil") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label(viewModel.selectedFileName, systemImage: "waveform")
+                    Label(viewModel.audioFile?.lastPathComponent ?? "Ingen lydfil valgt", systemImage: "waveform")
                         .lineLimit(2)
 
-                    if !viewModel.selectedFilePath.isEmpty {
-                        Text(viewModel.selectedFilePath)
+                    if let audioFile = viewModel.audioFile {
+                        Text(audioFile.path)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(3)
@@ -52,7 +52,7 @@ struct ContentView: View {
                     Label("Transkriber", systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.canStart)
+                .disabled(viewModel.audioFile == nil || viewModel.isRunning)
 
                 if viewModel.isRunning {
                     ProgressView()

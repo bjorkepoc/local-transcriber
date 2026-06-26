@@ -12,20 +12,7 @@ final class TranscriptionViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var isRunning = false
 
-    private let runner = TranscriptionRunner()
     private var lastResult: TranscriptionResult?
-
-    var canStart: Bool {
-        audioFile != nil && !isRunning
-    }
-
-    var selectedFileName: String {
-        audioFile?.lastPathComponent ?? "Ingen lydfil valgt"
-    }
-
-    var selectedFilePath: String {
-        audioFile?.path ?? ""
-    }
 
     var canSaveText: Bool {
         !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -33,9 +20,6 @@ final class TranscriptionViewModel: ObservableObject {
 
     func chooseAudioFile() {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
         panel.allowedContentTypes = [.audio, .movie]
 
         if panel.runModal() == .OK {
@@ -57,7 +41,7 @@ final class TranscriptionViewModel: ObservableObject {
         statusText = "Starter lokal transkribering"
 
         do {
-            let result = try await runner.transcribe(
+            let result = try await TranscriptionRunner.transcribe(
                 audioFile: audioFile,
                 language: selectedLanguage
             ) { [weak self] message in

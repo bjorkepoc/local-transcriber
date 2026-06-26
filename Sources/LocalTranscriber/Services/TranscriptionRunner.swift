@@ -1,14 +1,14 @@
 import Foundation
 
-struct TranscriptionRunner: Sendable {
-    func transcribe(
+enum TranscriptionRunner {
+    static func transcribe(
         audioFile: URL,
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) async throws -> TranscriptionResult {
         try await Task.detached(priority: .userInitiated) {
-            try self.ensureAudioFileExists(audioFile)
-            return try self.runMLXWhisper(audioFile: audioFile, language: language, status: status)
+            try ensureAudioFileExists(audioFile)
+            return try runMLXWhisper(audioFile: audioFile, language: language, status: status)
         }.value
     }
 
@@ -32,7 +32,7 @@ struct TranscriptionRunner: Sendable {
         return arguments
     }
 
-    private func runMLXWhisper(
+    private static func runMLXWhisper(
         audioFile: URL,
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
@@ -48,13 +48,15 @@ struct TranscriptionRunner: Sendable {
             language: language,
             outputDirectory: outputDirectory
         )
-        let execution = try runProcess(tool: "mlx_whisper", arguments: arguments)
+        let execution = try runProcess(arguments: arguments)
 
         guard execution.code == 0 else {
+            let output = execution.output.count > 1_200
+                ? String(execution.output.suffix(1_200))
+                : execution.output
             throw TranscriptionError.processFailed(
-                tool: "mlx_whisper",
                 code: execution.code,
-                output: displayTail(execution.output)
+                output: output
             )
         }
 
@@ -64,7 +66,7 @@ struct TranscriptionRunner: Sendable {
         let jsonURL = outputDirectory.appendingPathComponent("transcript.json")
 
         guard FileManager.default.fileExists(atPath: textURL.path) else {
-            throw TranscriptionError.missingOutput("MLX Whisper fullførte, men laget ikke transcript.txt.")
+            throw TranscriptionError.missingOutput
         }
 
         let text = try String(contentsOf: textURL, encoding: .utf8)
@@ -78,7 +80,7 @@ struct TranscriptionRunner: Sendable {
         return TranscriptionResult(text: text.trimmingCharacters(in: .whitespacesAndNewlines), srt: srt, json: json)
     }
 
-    private func ensureAudioFileExists(_ audioFile: URL) throws {
+    private static func ensureAudioFileExists(_ audioFile: URL) throws {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: audioFile.path, isDirectory: &isDirectory)
         guard exists, !isDirectory.boolValue else {
@@ -86,80 +88,44 @@ struct TranscriptionRunner: Sendable {
         }
     }
 
-    private func runProcess(tool: String, arguments: [String]) throws -> (code: Int32, output: String) {
-        let stdout = PipeCapture()
-        let stderr = PipeCapture()
-        let readers = DispatchGroup()
-        stdout.start(in: readers)
-        stderr.start(in: readers)
+    private static func runProcess(arguments: [String]) throws -> (code: Int32, output: String) {
+        let outputPipe = Pipe()
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [tool] + arguments
+        process.arguments = ["mlx_whisper"] + arguments
         var environment = ProcessInfo.processInfo.environment
         environment["HF_HUB_OFFLINE"] = "1"
         environment["TRANSFORMERS_OFFLINE"] = "1"
         environment["HF_HUB_DISABLE_TELEMETRY"] = "1"
         process.environment = environment
-        process.standardOutput = stdout.pipe
-        process.standardError = stderr.pipe
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
 
         try process.run()
+        let outputData = try outputPipe.fileHandleForReading.readToEnd() ?? Data()
         process.waitUntilExit()
-        readers.wait()
 
-        let output = [stdout.string, stderr.string]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
+        let output = String(decoding: outputData, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return (process.terminationStatus, output)
-    }
-
-    private func displayTail(_ text: String, maxCharacters: Int = 1_200) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > maxCharacters else { return trimmed }
-        return String(trimmed.suffix(maxCharacters))
     }
 }
 
 private enum TranscriptionError: Error, LocalizedError, Sendable {
     case fileNotFound(String)
-    case processFailed(tool: String, code: Int32, output: String)
-    case missingOutput(String)
+    case processFailed(code: Int32, output: String)
+    case missingOutput
 
     var errorDescription: String? {
         switch self {
         case .fileNotFound(let path):
             "Fant ikke lydfilen: \(path)"
-        case .processFailed(let tool, let code, let output):
-            "\(tool) feilet med kode \(code). \(output)"
-        case .missingOutput(let message):
-            message
-        }
-    }
-}
-
-private final class PipeCapture: @unchecked Sendable {
-    let pipe = Pipe()
-
-    private let lock = NSLock()
-    private var data = Data()
-
-    func start(in group: DispatchGroup) {
-        group.enter()
-        DispatchQueue.global(qos: .userInitiated).async {
-            defer { group.leave() }
-            let captured = (try? self.pipe.fileHandleForReading.readToEnd()) ?? Data()
-            self.lock.withLock {
-                self.data = captured
-            }
-        }
-    }
-
-    var string: String {
-        lock.withLock {
-            String(decoding: data, as: UTF8.self)
+        case .processFailed(let code, let output):
+            "mlx_whisper feilet med kode \(code). \(output)"
+        case .missingOutput:
+            "MLX Whisper fullførte, men laget ikke transcript.txt."
         }
     }
 }

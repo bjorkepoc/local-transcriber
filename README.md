@@ -45,19 +45,6 @@ Local Transcriber currently runs one local model:
 
 Appen setter `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1` og `HF_HUB_DISABLE_TELEMETRY=1` for prosessen den starter. Hvis modellen mangler lokalt, feiler `mlx_whisper` i stedet for at appen laster den ned.
 
-## Architecture
-
-This is a simple Swift Package Manager macOS app:
-
-- `Sources/LocalTranscriber/App` contains the app entry point.
-- `Sources/LocalTranscriber/Views` contains the SwiftUI UI.
-- `Sources/LocalTranscriber/ViewModels` coordinates UI state and save/copy actions.
-- `Sources/LocalTranscriber/Services` runs the local transcription process.
-- `Sources/LocalTranscriber/TranscriptionTypes.swift` defines languages and result types.
-- `Tests/LocalTranscriberTests` covers argument construction and language behavior.
-
-The app uses `Process` to launch `mlx_whisper`. Each transcription run writes into a temporary output directory; the app reads the generated files back into memory and removes the temporary directory afterward.
-
 ## License
 
 MIT. See [LICENSE](LICENSE).

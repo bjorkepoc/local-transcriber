@@ -4,7 +4,6 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="LocalTranscriber"
 BUNDLE_ID="local.codex.LocalTranscriber"
-MIN_SYSTEM_VERSION="14.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -40,23 +39,19 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
-  <string>$MIN_SYSTEM_VERSION</string>
+  <string>14.0</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
 </dict>
 </plist>
 PLIST
 
-open_app() {
-  /usr/bin/open -n "$APP_BUNDLE"
-}
-
 case "$MODE" in
   run)
-    open_app
+    /usr/bin/open -n "$APP_BUNDLE"
     ;;
   --verify|verify)
-    open_app
+    /usr/bin/open -n "$APP_BUNDLE"
     sleep 1
     pgrep -x "$APP_NAME" >/dev/null
     ;;
