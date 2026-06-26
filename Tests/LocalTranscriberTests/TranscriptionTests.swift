@@ -28,15 +28,3 @@ import Testing
     #expect(TranscriptionLanguage.danish.cliCode == "da")
     #expect(TranscriptionLanguage.auto.cliCode == nil)
 }
-
-@Test func onlyRunnableModelsAreVisible() {
-    #expect(TranscriptionModel.allCases == [.mlxWhisperLargeV3Turbo, .canary1BV2])
-}
-
-@Test func canaryIsRunnableButWarnedForNorwegianUse() {
-    let arguments = TranscriptionRunner.canaryArguments(
-        audioFile: URL(fileURLWithPath: "/tmp/test.wav"),
-        language: .norwegian
-    )
-    #expect(arguments == ["--source-lang", "no", "/tmp/test.wav"])
-}

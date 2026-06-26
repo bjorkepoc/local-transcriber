@@ -10,9 +10,6 @@ struct ContentView: View {
         } detail: {
             transcriptPane
         }
-        .onChange(of: viewModel.selectedModel) {
-            viewModel.applyModelDefaultLanguage()
-        }
     }
 
     private var sidebar: some View {
@@ -35,20 +32,6 @@ struct ContentView: View {
                     viewModel.chooseAudioFile()
                 } label: {
                     Label("Velg lydfil", systemImage: "folder")
-                }
-            }
-
-            Section("Modell") {
-                Picker("Modell", selection: $viewModel.selectedModel) {
-                    ForEach(TranscriptionModel.allCases) { model in
-                        Text(model.displayName).tag(model)
-                    }
-                }
-
-                if let notice = viewModel.modelNotice {
-                    Label(notice, systemImage: "info.circle")
-                        .font(.callout)
-                        .foregroundStyle(Color.secondary)
                 }
             }
 

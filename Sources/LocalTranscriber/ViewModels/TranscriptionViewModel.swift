@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 @MainActor
 final class TranscriptionViewModel: ObservableObject {
     @Published var audioFile: URL?
-    @Published var selectedModel: TranscriptionModel = .mlxWhisperLargeV3Turbo
     @Published var selectedLanguage: TranscriptionLanguage = .norwegian
     @Published var transcript = ""
     @Published var statusText = "Klar"
@@ -32,17 +31,6 @@ final class TranscriptionViewModel: ObservableObject {
         audioFile?.path ?? ""
     }
 
-    var modelNotice: String? {
-        switch selectedModel {
-        case .mlxWhisperLargeV3Turbo:
-            return "Anbefalt standard for norsk."
-        case .canary1BV2:
-            return selectedLanguage == .norwegian
-                ? "Ikke anbefalt for norsk"
-                : "Canary kjører lokalt, men MLX Whisper er anbefalt for norsk."
-        }
-    }
-
     var canSaveText: Bool {
         !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -61,11 +49,6 @@ final class TranscriptionViewModel: ObservableObject {
         }
     }
 
-    func applyModelDefaultLanguage() {
-        selectedLanguage = selectedModel.defaultLanguage
-        errorMessage = nil
-    }
-
     func transcribe() async {
         guard let audioFile else {
             errorMessage = "Velg en lydfil først."
@@ -80,7 +63,6 @@ final class TranscriptionViewModel: ObservableObject {
         do {
             let result = try await runner.transcribe(
                 audioFile: audioFile,
-                model: selectedModel,
                 language: selectedLanguage
             ) { [weak self] message in
                 Task { @MainActor in

@@ -3,14 +3,12 @@ import Foundation
 struct TranscriptionRunner: Sendable {
     func transcribe(
         audioFile: URL,
-        model: TranscriptionModel,
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) async throws -> TranscriptionResult {
         try await Task.detached(priority: .userInitiated) {
             try self.transcribeSynchronously(
                 audioFile: audioFile,
-                model: model,
                 language: language,
                 status: status
             )
@@ -37,31 +35,13 @@ struct TranscriptionRunner: Sendable {
         return arguments
     }
 
-    static func canaryArguments(audioFile: URL, language: TranscriptionLanguage) -> [String] {
-        var arguments: [String] = []
-
-        if let sourceLanguage = language.cliCode {
-            arguments.append(contentsOf: ["--source-lang", sourceLanguage])
-        }
-
-        arguments.append(audioFile.path)
-        return arguments
-    }
-
     private func transcribeSynchronously(
         audioFile: URL,
-        model: TranscriptionModel,
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
         try ensureAudioFileExists(audioFile)
-
-        switch model {
-        case .mlxWhisperLargeV3Turbo:
-            return try runMLXWhisper(audioFile: audioFile, language: language, status: status)
-        case .canary1BV2:
-            return try runCanary(audioFile: audioFile, language: language, status: status)
-        }
+        return try runMLXWhisper(audioFile: audioFile, language: language, status: status)
     }
 
     private func runMLXWhisper(
@@ -69,7 +49,9 @@ struct TranscriptionRunner: Sendable {
         language: TranscriptionLanguage,
         status: @escaping @Sendable (String) -> Void
     ) throws -> TranscriptionResult {
-        let outputDirectory = try createTemporaryDirectory(named: "mlx-output")
+        let outputDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LocalTranscriber-mlx-output-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: outputDirectory) }
 
         status("Kjører MLX Whisper lokalt")
@@ -108,31 +90,6 @@ struct TranscriptionRunner: Sendable {
         return TranscriptionResult(text: text.trimmingCharacters(in: .whitespacesAndNewlines), srt: srt, json: json)
     }
 
-    private func runCanary(
-        audioFile: URL,
-        language: TranscriptionLanguage,
-        status: @escaping @Sendable (String) -> Void
-    ) throws -> TranscriptionResult {
-        status("Kjører NVIDIA Canary lokalt")
-        let arguments = Self.canaryArguments(audioFile: audioFile, language: language)
-        let execution = try runProcess(tool: "canary-transcribe", arguments: arguments)
-
-        guard execution.terminationStatus == 0 else {
-            throw TranscriptionError.processFailed(
-                tool: "canary-transcribe",
-                code: execution.terminationStatus,
-                output: displayTail(execution.combinedOutput)
-            )
-        }
-
-        let text = execution.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            throw TranscriptionError.missingOutput("Canary fullførte, men ga ingen transkripsjon på stdout.")
-        }
-
-        return TranscriptionResult(text: text, srt: nil, json: nil)
-    }
-
     private func ensureAudioFileExists(_ audioFile: URL) throws {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: audioFile.path, isDirectory: &isDirectory)
@@ -151,7 +108,11 @@ struct TranscriptionRunner: Sendable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [tool] + arguments
-        process.environment = processEnvironment()
+        var environment = ProcessInfo.processInfo.environment
+        environment["HF_HUB_OFFLINE"] = "1"
+        environment["TRANSFORMERS_OFFLINE"] = "1"
+        environment["HF_HUB_DISABLE_TELEMETRY"] = "1"
+        process.environment = environment
         process.standardOutput = stdout.pipe
         process.standardError = stderr.pipe
 
@@ -164,21 +125,6 @@ struct TranscriptionRunner: Sendable {
             standardOutput: stdout.string,
             standardError: stderr.string
         )
-    }
-
-    private func processEnvironment() -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
-        environment["HF_HUB_OFFLINE"] = "1"
-        environment["TRANSFORMERS_OFFLINE"] = "1"
-        environment["HF_HUB_DISABLE_TELEMETRY"] = "1"
-        return environment
-    }
-
-    private func createTemporaryDirectory(named prefix: String) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LocalTranscriber-\(prefix)-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
     }
 
     private func displayTail(_ text: String, maxCharacters: Int = 1_200) -> String {
