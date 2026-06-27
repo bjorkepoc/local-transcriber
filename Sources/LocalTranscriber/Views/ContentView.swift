@@ -73,7 +73,7 @@ struct ContentView: View {
                             Text(model.displayName)
                             Text(model.detail)
                                 .font(.caption)
-                                .foregroundStyle(model.isRunnable ? Color.secondary : Color.orange)
+                                .foregroundStyle(model.hasWarningDetail ? Color.orange : Color.secondary)
                                 .textSelection(.enabled)
                         }
                     }
