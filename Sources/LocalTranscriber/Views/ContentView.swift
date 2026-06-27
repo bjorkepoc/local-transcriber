@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = TranscriptionViewModel()
+    @StateObject private var viewModel = MultiModelTranscriptionViewModel()
 
     var body: some View {
         NavigationSplitView {
@@ -43,16 +43,41 @@ struct ContentView: View {
                 }
             }
 
+            Section("Modeller") {
+                ForEach(TranscriptionModel.availableBuiltIns, id: \.id) { model in
+                    Toggle(isOn: Binding(
+                        get: { viewModel.isBuiltInModelSelected(model) },
+                        set: { viewModel.setBuiltInModel(model, isSelected: $0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(model.displayName)
+                            Text(model.detail)
+                                .font(.caption)
+                                .foregroundStyle(model.isRunnable ? Color.secondary : Color.orange)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .disabled(!model.isRunnable)
+                }
+
+                TextField("Ekstra MLX modell-ID-er", text: $viewModel.customModelText)
+                    .textFieldStyle(.roundedBorder)
+
+                Text("\(viewModel.selectedModelCount) valgt")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 Button {
                     Task {
                         await viewModel.transcribe()
                     }
                 } label: {
-                    Label("Transkriber", systemImage: "play.fill")
+                    Label(viewModel.selectedModelCount > 1 ? "Transkriber modeller" : "Transkriber", systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(viewModel.audioFile == nil || viewModel.isRunning)
+                .disabled(!viewModel.canStart)
 
                 if viewModel.isRunning {
                     ProgressView()
@@ -102,34 +127,54 @@ struct ContentView: View {
             Text("Transkripsjon")
                 .font(.headline)
 
+            if viewModel.hasOutputChoices {
+                Picker("Vis", selection: Binding(
+                    get: { viewModel.selectedOutputID },
+                    set: { viewModel.selectOutput($0) }
+                )) {
+                    ForEach(viewModel.outputChoices) { choice in
+                        Text(choice.displayName).tag(choice.id)
+                    }
+                }
+                .frame(maxWidth: 260)
+            }
+
             Spacer()
 
             Button {
                 viewModel.copyTranscript()
             } label: {
-                Label("Kopier tekst", systemImage: "doc.on.doc")
+                Label("Kopier", systemImage: "doc.on.doc")
             }
+            .labelStyle(.iconOnly)
+            .help("Kopier tekst")
             .disabled(!viewModel.canSaveText)
 
             Button {
                 viewModel.saveTranscriptAsText()
             } label: {
-                Label("Lagre TXT", systemImage: "square.and.arrow.down")
+                Label("TXT", systemImage: "square.and.arrow.down")
             }
+            .labelStyle(.iconOnly)
+            .help("Lagre som TXT")
             .disabled(!viewModel.canSaveText)
 
             Button {
                 viewModel.saveGeneratedSRT()
             } label: {
-                Label("Lagre SRT", systemImage: "captions.bubble")
+                Label("SRT", systemImage: "captions.bubble")
             }
+            .labelStyle(.iconOnly)
+            .help("Lagre som SRT")
             .disabled(!viewModel.canSaveSRT)
 
             Button {
                 viewModel.saveGeneratedJSON()
             } label: {
-                Label("Lagre JSON", systemImage: "curlybraces")
+                Label("JSON", systemImage: "curlybraces")
             }
+            .labelStyle(.iconOnly)
+            .help("Lagre som JSON")
             .disabled(!viewModel.canSaveJSON)
         }
     }
