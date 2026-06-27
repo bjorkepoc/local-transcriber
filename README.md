@@ -8,7 +8,8 @@ Native macOS-app for lokal transkribering med lokale modeller. Appen sender ikke
 - Swift toolchain compatible with SwiftPM `swift-tools-version: 6.3`.
 - `mlx_whisper` available in `PATH`.
 - `canary-transcribe` available in `PATH` for NVIDIA Canary.
-- `mlx-community/whisper-large-v3-turbo` downloaded locally for the recommended default model.
+- `uv` available in `PATH` for local Transformers/HF Whisper.
+- The selected model downloaded locally.
 
 The app intentionally does not download models at runtime. If a model is missing, the local command fails instead of the app silently using the network.
 
@@ -46,11 +47,13 @@ Local Transcriber shows the downloaded local transcription models:
   - Marked in the UI as not recommended for Norwegian.
   - Produces TXT output in this app.
 - `openai/whisper-large-v3-turbo`
-  - Downloaded locally.
-  - Visible in the app, but disabled until a local Transformers/HF runner is added.
+  - Tool: local Transformers/HF through `uv`.
+  - Runs locally from the Hugging Face cache.
+  - Produces TXT and JSON output in this app.
 - `openai/whisper-large-v3`
-  - Downloaded locally.
-  - Visible in the app, but disabled until a local Transformers/HF runner is added.
+  - Tool: local Transformers/HF through `uv`.
+  - Runs locally from the Hugging Face cache.
+  - Produces TXT and JSON output in this app.
 
 The app also accepts extra `mlx_whisper` model IDs or local MLX model directories in the model field. Separate multiple custom models with commas.
 
@@ -65,7 +68,7 @@ The MLX runner uses `--output-format all`, allowing the app to save TXT, SRT, an
 
 ## Offline Policy
 
-Appen setter `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1` og `HF_HUB_DISABLE_TELEMETRY=1` for prosessene den starter. Hvis modellen mangler lokalt, feiler kommandoen i stedet for at appen laster den ned.
+Appen setter `UV_OFFLINE=1`, `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1` og `HF_HUB_DISABLE_TELEMETRY=1` for prosessene den starter. Hvis modellen eller nødvendige lokale Python-pakker mangler, feiler kommandoen i stedet for at appen laster noe ned.
 
 ## License
 

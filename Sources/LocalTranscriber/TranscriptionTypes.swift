@@ -36,6 +36,21 @@ enum TranscriptionLanguage: String, CaseIterable, Identifiable, Sendable {
             nil
         }
     }
+
+    var transformersLanguage: String? {
+        switch self {
+        case .norwegian:
+            "norwegian"
+        case .english:
+            "english"
+        case .swedish:
+            "swedish"
+        case .danish:
+            "danish"
+        case .auto:
+            nil
+        }
+    }
 }
 
 struct TranscriptionResult: Sendable {

@@ -50,7 +50,7 @@ enum TranscriptionModel: Hashable, Identifiable, Sendable {
         case .mlxLargeV3Turbo:
             "\(id) · anbefalt for norsk"
         case .hfLargeV3Turbo, .hfLargeV3:
-            "\(id) · lastet ned, men Transformers-runner er ikke koblet til ennå"
+            "\(id) · lokalt via Transformers/HF"
         case .canary1BV2:
             "\(id) · lokalt, ikke anbefalt for norsk"
         case .custom:
@@ -60,28 +60,17 @@ enum TranscriptionModel: Hashable, Identifiable, Sendable {
 
     var isRunnable: Bool {
         switch self {
-        case .mlxLargeV3Turbo, .canary1BV2, .custom:
+        case .mlxLargeV3Turbo, .hfLargeV3Turbo, .hfLargeV3, .canary1BV2, .custom:
             true
-        case .hfLargeV3Turbo, .hfLargeV3:
-            false
         }
     }
 
     var hasWarningDetail: Bool {
         switch self {
-        case .hfLargeV3Turbo, .hfLargeV3, .canary1BV2:
+        case .canary1BV2:
             true
-        case .mlxLargeV3Turbo, .custom:
+        case .mlxLargeV3Turbo, .hfLargeV3Turbo, .hfLargeV3, .custom:
             false
-        }
-    }
-
-    var unavailableReason: String? {
-        switch self {
-        case .hfLargeV3Turbo, .hfLargeV3:
-            "Synlig fordi modellen er lastet ned lokalt, men appen har ikke en lokal Transformers/HF-runner ennå."
-        case .mlxLargeV3Turbo, .canary1BV2, .custom:
-            nil
         }
     }
 

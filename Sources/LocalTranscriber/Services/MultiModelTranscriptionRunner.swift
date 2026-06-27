@@ -78,7 +78,12 @@ extension TranscriptionRunner {
                             status: status
                         )
                     case .hfLargeV3Turbo, .hfLargeV3:
-                        throw MultiModelTranscriptionError.unsupportedModel(modelID: model.id)
+                        result = try runHFWhisper(
+                            audioFile: audioFile,
+                            language: language,
+                            model: model,
+                            status: status
+                        )
                     }
 
                     return ModelTranscriptionResult(model: model, result: result)
@@ -155,6 +160,27 @@ extension TranscriptionRunner {
         return arguments
     }
 
+    static func hfTransformersArguments(
+        audioFile: URL,
+        language: TranscriptionLanguage,
+        model: TranscriptionModel,
+        outputDirectory: URL
+    ) -> [String] {
+        [
+            "run", "--python", "3.12",
+            "--with", "transformers",
+            "--with", "torch",
+            "--with", "accelerate",
+            "--with", "soundfile",
+            "--with", "librosa",
+            "python", "-c", hfTransformersScript,
+            model.id,
+            language.transformersLanguage ?? "",
+            audioFile.path,
+            outputDirectory.path
+        ]
+    }
+
     private static func runCanary(
         audioFile: URL,
         language: TranscriptionLanguage,
@@ -183,6 +209,52 @@ extension TranscriptionRunner {
         )
     }
 
+    private static func runHFWhisper(
+        audioFile: URL,
+        language: TranscriptionLanguage,
+        model: TranscriptionModel,
+        status: @escaping @Sendable (String) -> Void
+    ) throws -> TranscriptionResult {
+        let outputDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LocalTranscriber-hf-output-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
+
+        status("Kjører \(model.displayName)")
+        let arguments = hfTransformersArguments(
+            audioFile: audioFile,
+            language: language,
+            model: model,
+            outputDirectory: outputDirectory
+        )
+        let execution = try runMultiModelProcess(command: "uv", arguments: arguments)
+
+        guard execution.code == 0 else {
+            let output = execution.output.count > 1_200
+                ? String(execution.output.suffix(1_200))
+                : execution.output
+            throw MultiModelTranscriptionError.processFailed(
+                modelID: model.id,
+                code: execution.code,
+                output: output
+            )
+        }
+
+        let textURL = outputDirectory.appendingPathComponent("transcript.txt")
+        let jsonURL = outputDirectory.appendingPathComponent("transcript.json")
+
+        guard FileManager.default.fileExists(atPath: textURL.path) else {
+            throw MultiModelTranscriptionError.missingOutput
+        }
+
+        let text = try String(contentsOf: textURL, encoding: .utf8)
+        let json = FileManager.default.fileExists(atPath: jsonURL.path)
+            ? try String(contentsOf: jsonURL, encoding: .utf8)
+            : nil
+
+        return TranscriptionResult(text: text.trimmingCharacters(in: .whitespacesAndNewlines), srt: nil, json: json)
+    }
+
     private static func ensureMultiModelAudioFileExists(_ audioFile: URL) throws {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: audioFile.path, isDirectory: &isDirectory)
@@ -198,6 +270,7 @@ extension TranscriptionRunner {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [command] + arguments
         var environment = ProcessInfo.processInfo.environment
+        environment["UV_OFFLINE"] = "1"
         environment["HF_HUB_OFFLINE"] = "1"
         environment["TRANSFORMERS_OFFLINE"] = "1"
         environment["HF_HUB_DISABLE_TELEMETRY"] = "1"
@@ -221,7 +294,6 @@ private enum MultiModelTranscriptionError: Error, LocalizedError, Sendable {
     case noModelsSelected
     case processFailed(modelID: String, code: Int32, output: String)
     case missingOutput
-    case unsupportedModel(modelID: String)
 
     var errorDescription: String? {
         switch self {
@@ -230,11 +302,55 @@ private enum MultiModelTranscriptionError: Error, LocalizedError, Sendable {
         case .noModelsSelected:
             "Velg minst én modell."
         case .processFailed(let modelID, let code, let output):
-            "mlx_whisper feilet for \(modelID) med kode \(code). \(output)"
+            "Transkribering feilet for \(modelID) med kode \(code). \(output)"
         case .missingOutput:
-            "MLX Whisper fullførte, men laget ikke transcript.txt."
-        case .unsupportedModel(let modelID):
-            "\(modelID) er lastet ned lokalt, men appen har ikke en lokal runner for denne modelltypen ennå."
+            "Transkriberingen fullførte, men laget ikke transcript.txt."
         }
     }
 }
+
+private let hfTransformersScript = #"""
+import json
+import sys
+from pathlib import Path
+
+import torch
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+
+model_id, language_name, audio_path, output_path = sys.argv[1:5]
+output_dir = Path(output_path)
+output_dir.mkdir(parents=True, exist_ok=True)
+
+device = "mps" if torch.backends.mps.is_available() else "cpu"
+dtype = torch.float16 if device == "mps" else torch.float32
+
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    model_id,
+    dtype=dtype,
+    low_cpu_mem_usage=True,
+    local_files_only=True,
+)
+model.to(device)
+processor = AutoProcessor.from_pretrained(model_id, local_files_only=True)
+recognizer = pipeline(
+    "automatic-speech-recognition",
+    model=model,
+    tokenizer=processor.tokenizer,
+    feature_extractor=processor.feature_extractor,
+    device=device,
+)
+
+generate_kwargs = {"task": "transcribe"}
+if language_name:
+    generate_kwargs["language"] = language_name
+
+result = recognizer(audio_path, generate_kwargs=generate_kwargs)
+text = result.get("text", "").strip()
+
+(output_dir / "transcript.txt").write_text(text, encoding="utf-8")
+(output_dir / "transcript.json").write_text(
+    json.dumps(result, ensure_ascii=False, indent=2),
+    encoding="utf-8",
+)
+print(text)
+"""#

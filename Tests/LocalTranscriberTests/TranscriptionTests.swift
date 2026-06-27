@@ -56,9 +56,25 @@ import Testing
         "openai/whisper-large-v3",
         "nvidia/canary-1b-v2"
     ])
-    #expect(TranscriptionModel.hfLargeV3Turbo.isRunnable == false)
-    #expect(TranscriptionModel.hfLargeV3.isRunnable == false)
+    #expect(TranscriptionModel.hfLargeV3Turbo.isRunnable)
+    #expect(TranscriptionModel.hfLargeV3.isRunnable)
     #expect(TranscriptionModel.canary1BV2.isRunnable)
+}
+
+@Test func hfTransformersArgumentsUseUvAndSelectedModel() {
+    let arguments = TranscriptionRunner.hfTransformersArguments(
+        audioFile: URL(fileURLWithPath: "/tmp/test.wav"),
+        language: .norwegian,
+        model: .hfLargeV3,
+        outputDirectory: URL(fileURLWithPath: "/tmp/out", isDirectory: true)
+    )
+
+    #expect(arguments.prefix(2) == ["run", "--python"])
+    #expect(arguments.contains("transformers"))
+    #expect(arguments.contains("torch"))
+    #expect(arguments.contains("openai/whisper-large-v3"))
+    #expect(arguments.contains("norwegian"))
+    #expect(arguments.suffix(2) == ["/tmp/test.wav", "/tmp/out"])
 }
 
 @Test func canaryArgumentsUseSelectedLanguage() {
