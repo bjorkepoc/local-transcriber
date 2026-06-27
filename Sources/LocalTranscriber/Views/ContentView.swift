@@ -43,6 +43,26 @@ struct ContentView: View {
                 }
             }
 
+            Section {
+                Button {
+                    Task {
+                        await viewModel.transcribe()
+                    }
+                } label: {
+                    Label(viewModel.selectedModelCount > 1 ? "Transkriber modeller" : "Transkriber", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!viewModel.canStart)
+
+                if viewModel.isRunning {
+                    ProgressView()
+                }
+
+                Text(viewModel.statusText)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
             Section("Modeller") {
                 ForEach(TranscriptionModel.availableBuiltIns, id: \.id) { model in
                     Toggle(isOn: Binding(
@@ -66,26 +86,6 @@ struct ContentView: View {
                 Text("\(viewModel.selectedModelCount) valgt")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Button {
-                    Task {
-                        await viewModel.transcribe()
-                    }
-                } label: {
-                    Label(viewModel.selectedModelCount > 1 ? "Transkriber modeller" : "Transkriber", systemImage: "play.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.canStart)
-
-                if viewModel.isRunning {
-                    ProgressView()
-                }
-
-                Text(viewModel.statusText)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
             }
 
             if let errorMessage = viewModel.errorMessage {
