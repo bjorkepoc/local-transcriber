@@ -77,7 +77,6 @@ struct ContentView: View {
                                 .textSelection(.enabled)
                         }
                     }
-                    .disabled(!model.isRunnable)
                 }
 
                 TextField("Ekstra MLX modell-ID-er", text: $viewModel.customModelText)

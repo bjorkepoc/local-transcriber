@@ -58,13 +58,6 @@ enum TranscriptionModel: Hashable, Identifiable, Sendable {
         }
     }
 
-    var isRunnable: Bool {
-        switch self {
-        case .mlxLargeV3Turbo, .hfLargeV3Turbo, .hfLargeV3, .canary1BV2, .custom:
-            true
-        }
-    }
-
     var hasWarningDetail: Bool {
         switch self {
         case .canary1BV2:

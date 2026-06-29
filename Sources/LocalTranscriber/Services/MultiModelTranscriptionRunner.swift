@@ -1,6 +1,6 @@
 import Foundation
 
-extension TranscriptionRunner {
+enum TranscriptionRunner {
     static func transcribe(
         audioFile: URL,
         language: TranscriptionLanguage,

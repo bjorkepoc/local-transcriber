@@ -27,7 +27,7 @@ final class MultiModelTranscriptionViewModel: ObservableObject {
 
     var selectedModels: [TranscriptionModel] {
         let builtIns = TranscriptionModel.availableBuiltIns.filter {
-            selectedBuiltInModels.contains($0) && $0.isRunnable
+            selectedBuiltInModels.contains($0)
         }
         let customModels = TranscriptionModel.models(from: customModelText, includeDefault: false)
         return TranscriptionModel.unique(builtIns + customModels)
@@ -75,11 +75,6 @@ final class MultiModelTranscriptionViewModel: ObservableObject {
     }
 
     func setBuiltInModel(_ model: TranscriptionModel, isSelected: Bool) {
-        guard model.isRunnable else {
-            selectedBuiltInModels.remove(model)
-            return
-        }
-
         if isSelected {
             selectedBuiltInModels.insert(model)
         } else {

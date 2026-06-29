@@ -49,16 +49,13 @@ import Testing
     ])
 }
 
-@Test func builtInModelsIncludeDownloadedLocalModels() {
+@Test func builtInModelsIncludeLocalModels() {
     #expect(TranscriptionModel.availableBuiltIns.map(\.id) == [
         "mlx-community/whisper-large-v3-turbo",
         "openai/whisper-large-v3-turbo",
         "openai/whisper-large-v3",
         "nvidia/canary-1b-v2"
     ])
-    #expect(TranscriptionModel.hfLargeV3Turbo.isRunnable)
-    #expect(TranscriptionModel.hfLargeV3.isRunnable)
-    #expect(TranscriptionModel.canary1BV2.isRunnable)
 }
 
 @Test func hfTransformersArgumentsUseUvAndSelectedModel() {
